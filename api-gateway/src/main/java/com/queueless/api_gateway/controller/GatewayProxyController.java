@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
@@ -33,6 +34,20 @@ public class GatewayProxyController {
     @Value("${services.customer.url:http://localhost:8084}")
     private String customerServiceUrl;
 
+    @PostConstruct
+    void normalizeServiceUrls() {
+        this.authServiceUrl = stripTrailingSlashes(this.authServiceUrl);
+        this.officeServiceUrl = stripTrailingSlashes(this.officeServiceUrl);
+        this.customerServiceUrl = stripTrailingSlashes(this.customerServiceUrl);
+    }
+
+    private static String stripTrailingSlashes(String url) {
+        if (url == null) {
+            return null;
+        }
+        return url.replaceAll("/+$", "");
+    }
+
     private static final Set<String> DISALLOWED_HEADERS = Set.of(
             "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
             "te", "trailer", "transfer-encoding", "upgrade", "host", "content-length",
@@ -46,7 +61,7 @@ public class GatewayProxyController {
                 .build();
     }
 
-    @RequestMapping(value = {"/api/auth/**", "/api/test/**", "/api/office/**", "/api/**"})
+    @RequestMapping(value = {"/api/auth/**", "/api/test/**", "/api/office/**", "/uploads/**", "/api/**"})
     public ResponseEntity<byte[]> proxyRequest(HttpServletRequest request) {
         try {
             String targetBaseUrl = resolveTargetServiceUrl(request.getRequestURI());
@@ -140,7 +155,7 @@ public class GatewayProxyController {
     private String resolveTargetServiceUrl(String uri) {
         if (uri.startsWith("/api/auth/") || uri.startsWith("/api/test/")) {
             return authServiceUrl;
-        } else if (uri.startsWith("/api/office/") || uri.startsWith("/api/provider/")) {
+        } else if (uri.startsWith("/api/office/") || uri.startsWith("/api/provider/") || uri.startsWith("/uploads/")) {
             return officeServiceUrl;
         } else if (uri.startsWith("/api/queue/office/")) {
             return officeServiceUrl;

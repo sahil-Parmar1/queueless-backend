@@ -5,6 +5,7 @@ import java.util.Date;
 
 import javax.crypto.SecretKey;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import io.jsonwebtoken.Claims;
@@ -14,13 +15,20 @@ import io.jsonwebtoken.security.Keys;
 @Service
 public class JwtService {
 
-    private static final String SECRET =
-            "QueuelessSecretKeyForJwtAuthentication2026VerySecureKey";
-
-    private final SecretKey key =
-            Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+    private final SecretKey key;
 
     private final long expirationTime = 1000L * 60 * 60 * 24 * 30; // 30 days
+
+    public JwtService(@Value("${jwt.secret:}") String secret) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("jwt.secret (JWT_SECRET environment variable) must be configured");
+        }
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException("jwt.secret must be at least 32 bytes for HMAC-SHA signing");
+        }
+        this.key = Keys.hmacShaKeyFor(keyBytes);
+    }
 
     public String extractEmail(String token) {
         return Jwts.parser()
