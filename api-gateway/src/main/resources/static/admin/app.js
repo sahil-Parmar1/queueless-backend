@@ -42,8 +42,20 @@
   const previewTitle = document.getElementById("preview-title");
   const previewContainer = document.getElementById("preview-container");
   const closePreviewBtn = document.getElementById("close-preview-btn");
+  const modalDeleteOfficeBtn = document.getElementById("modal-delete-office-btn");
+
+  const navOfficesBtn = document.getElementById("nav-offices-btn");
+  const navCustomersBtn = document.getElementById("nav-customers-btn");
+  const officesSection = document.getElementById("offices-section");
+  const customersSection = document.getElementById("customers-section");
+  const statCustomersTotal = document.getElementById("stat-customers-total");
+  const customerSearchInput = document.getElementById("customer-search-input");
+  const customersTbody = document.getElementById("customers-tbody");
+  const customersEmptyState = document.getElementById("customers-empty-state");
 
   let offices = [];
+  let customers = [];
+  let activeSection = "OFFICES";
   let activeFilter = "ALL";
   let activeOffice = null;
   let activePreviewUrl = null;
@@ -106,6 +118,7 @@
     sessionStorage.removeItem(STORAGE_TOKEN);
     sessionStorage.removeItem(STORAGE_USER);
     offices = [];
+    customers = [];
     closeModal();
     dashboardView.classList.add("hidden");
     loginView.classList.remove("hidden");
@@ -162,7 +175,32 @@
     dashboardView.classList.remove("hidden");
     gatewayPill.textContent = getGatewayUrl();
     adminUserLabel.textContent = `Signed in as ${sessionStorage.getItem(STORAGE_USER) || "Admin"}`;
-    loadOffices();
+    loadActiveSection();
+  }
+
+  function switchSection(section) {
+    activeSection = section;
+    if (section === "CUSTOMERS") {
+      navOfficesBtn.classList.remove("active");
+      navCustomersBtn.classList.add("active");
+      officesSection.classList.add("hidden");
+      customersSection.classList.remove("hidden");
+      loadCustomers();
+    } else {
+      navCustomersBtn.classList.remove("active");
+      navOfficesBtn.classList.add("active");
+      customersSection.classList.add("hidden");
+      officesSection.classList.remove("hidden");
+      loadOffices();
+    }
+  }
+
+  function loadActiveSection() {
+    if (activeSection === "CUSTOMERS") {
+      loadCustomers();
+    } else {
+      loadOffices();
+    }
   }
 
   async function loadOffices() {
@@ -301,6 +339,15 @@
         rejectBtn.addEventListener("click", () => updateStatus(office.id, "REJECTED"));
         actions.appendChild(rejectBtn);
       }
+
+      const deleteOfficeBtn = document.createElement("button");
+      deleteOfficeBtn.type = "button";
+      deleteOfficeBtn.className = "btn btn-outline btn-sm";
+      deleteOfficeBtn.style.color = "var(--reject)";
+      deleteOfficeBtn.style.borderColor = "#fecaca";
+      deleteOfficeBtn.textContent = "Delete";
+      deleteOfficeBtn.addEventListener("click", () => deleteOffice(office));
+      actions.appendChild(deleteOfficeBtn);
 
       tdActions.appendChild(actions);
       tr.append(tdOffice, tdCat, tdLoc, tdStatus, tdDocs, tdActions);
@@ -521,11 +568,149 @@
     detailModal.classList.add("hidden");
   }
 
+  async function deleteOffice(office) {
+    const label = office.name || office.officeId || `Office #${office.id}`;
+    if (!window.confirm(
+      `PERMANENTLY delete "${label}"?\n\nThis will delete its office profile, verification documents (DB & disk), providers, queue tokens, favorites, and login account.`
+    )) {
+      return;
+    }
+
+    hideAlert(banner);
+    try {
+      const res = await apiFetch(`/api/admin/offices/${encodeURIComponent(office.id)}`, {
+        method: "DELETE"
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || data.error || `Failed to delete office (${res.status})`);
+      }
+      if (activeOffice && activeOffice.id === office.id) {
+        closeModal();
+      }
+      showAlert(
+        banner,
+        `Deleted "${label}" (tokens removed: ${data.deletedTokens ?? 0}, providers: ${data.deletedProviders ?? 0}, disk files: ${data.deletedDocumentsFromDisk ?? 0}).`,
+        true
+      );
+      await loadOffices();
+    } catch (err) {
+      if (err.message !== "Unauthorized") {
+        showAlert(banner, err.message || "Failed to delete office.");
+      }
+    }
+  }
+
+  async function loadCustomers() {
+    hideAlert(banner);
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = "Loading...";
+
+    try {
+      const res = await apiFetch("/api/admin/customers");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || err.error || `Failed to load customers (${res.status})`);
+      }
+      customers = await res.json();
+      statCustomersTotal.textContent = customers.length;
+      renderCustomers();
+    } catch (err) {
+      if (err.message !== "Unauthorized") {
+        showAlert(banner, err.message || "Could not fetch customers.");
+      }
+    } finally {
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = "Refresh";
+    }
+  }
+
+  function renderCustomers() {
+    const q = customerSearchInput.value.trim().toLowerCase();
+    const rows = customers.filter((c) => {
+      if (!q) return true;
+      return [c.id, c.name, c.email].filter(Boolean).join(" ").toLowerCase().includes(q);
+    });
+
+    customersTbody.innerHTML = "";
+    if (rows.length === 0) {
+      customersEmptyState.classList.remove("hidden");
+      return;
+    }
+    customersEmptyState.classList.add("hidden");
+
+    for (const c of rows) {
+      const tr = document.createElement("tr");
+
+      const tdName = document.createElement("td");
+      const nameDiv = document.createElement("div");
+      nameDiv.className = "office-title";
+      nameDiv.textContent = c.name || "Customer";
+      const idDiv = document.createElement("div");
+      idDiv.className = "subline mono";
+      idDiv.textContent = `User ID #${c.id}`;
+      tdName.append(nameDiv, idDiv);
+
+      const tdEmail = document.createElement("td");
+      tdEmail.textContent = c.email || "—";
+
+      const tdCreated = document.createElement("td");
+      tdCreated.textContent = c.createdAt ? c.createdAt.replace("T", " ").slice(0, 16) : "—";
+
+      const tdTokens = document.createElement("td");
+      tdTokens.textContent = String(c.tokenCount ?? 0);
+
+      const tdActions = document.createElement("td");
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-reject btn-sm";
+      delBtn.textContent = "Delete Customer";
+      delBtn.addEventListener("click", () => deleteCustomer(c));
+      tdActions.appendChild(delBtn);
+
+      tr.append(tdName, tdEmail, tdCreated, tdTokens, tdActions);
+      customersTbody.appendChild(tr);
+    }
+  }
+
+  async function deleteCustomer(customer) {
+    const label = customer.email || customer.name || `Customer #${customer.id}`;
+    if (!window.confirm(
+      `PERMANENTLY delete customer "${label}"?\n\nThis will delete the customer account, favorite offices, and booked queue tokens from MySQL.`
+    )) {
+      return;
+    }
+
+    hideAlert(banner);
+    try {
+      const res = await apiFetch(`/api/admin/customers/${encodeURIComponent(customer.id)}`, {
+        method: "DELETE"
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || data.error || `Failed to delete customer (${res.status})`);
+      }
+      showAlert(
+        banner,
+        `Deleted customer "${label}" (tokens removed: ${data.deletedTokens ?? 0}, favorites removed: ${data.deletedFavorites ?? 0}).`,
+        true
+      );
+      await loadCustomers();
+    } catch (err) {
+      if (err.message !== "Unauthorized") {
+        showAlert(banner, err.message || "Failed to delete customer.");
+      }
+    }
+  }
+
   // Event listeners
   loginForm.addEventListener("submit", handleLogin);
-  refreshBtn.addEventListener("click", loadOffices);
+  refreshBtn.addEventListener("click", loadActiveSection);
   logoutBtn.addEventListener("click", () => logout());
   searchInput.addEventListener("input", renderTable);
+  customerSearchInput.addEventListener("input", renderCustomers);
+  navOfficesBtn.addEventListener("click", () => switchSection("OFFICES"));
+  navCustomersBtn.addEventListener("click", () => switchSection("CUSTOMERS"));
   closeModalBtn.addEventListener("click", closeModal);
   closePreviewBtn.addEventListener("click", clearPreview);
 
@@ -533,6 +718,9 @@
     if (e.target === detailModal) closeModal();
   });
 
+  modalDeleteOfficeBtn.addEventListener("click", () => {
+    if (activeOffice) deleteOffice(activeOffice);
+  });
   modalApproveBtn.addEventListener("click", () => {
     if (activeOffice) updateStatus(activeOffice.id, "APPROVED");
   });

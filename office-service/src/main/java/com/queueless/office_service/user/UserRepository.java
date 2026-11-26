@@ -1,5 +1,6 @@
 package com.queueless.office_service.user;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,4 +18,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByOfficeId(String officeId);
 
     boolean existsByOfficeId(String officeId);
+
+    List<User> findByRoleOrderByIdDesc(Role role);
 }

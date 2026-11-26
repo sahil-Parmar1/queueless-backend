@@ -42,6 +42,9 @@ class AdminOfficeControllerTest {
     @Mock
     private FileStorageService fileStorageService;
 
+    @Mock
+    private AdminCleanupService cleanupService;
+
     private DocumentSignatureService signatureService;
     private AdminOfficeController controller;
     private OfficeProfile profile;
@@ -50,7 +53,7 @@ class AdminOfficeControllerTest {
     @BeforeEach
     void setUp() {
         signatureService = new DocumentSignatureService("test-jwt-secret-key-at-least-32-bytes-long");
-        controller = new AdminOfficeController(profileRepository, documentRepository, fileStorageService, signatureService);
+        controller = new AdminOfficeController(profileRepository, documentRepository, fileStorageService, signatureService, cleanupService);
 
         User user = new User();
         user.setId(7L);
@@ -131,5 +134,19 @@ class AdminOfficeControllerTest {
         assertEquals(10L, deleteResp.getBody().get("deletedDocumentId"));
         assertEquals(true, deleteResp.getBody().get("deletedFromDisk"));
         assertEquals(0, profile.getDocuments().size());
+    }
+
+    @Test
+    void deleteOfficeAndCustomerDelegateToCleanupService() {
+        when(cleanupService.deleteOfficeAndData(1L)).thenReturn(Map.of("deletedOfficeId", 1L, "deletedTokens", 4));
+        when(cleanupService.deleteCustomerAndData(20L)).thenReturn(Map.of("deletedCustomerId", 20L, "deletedTokens", 2));
+
+        ResponseEntity<Map<String, Object>> officeResp = controller.deleteOffice(1L);
+        assertEquals(HttpStatus.OK, officeResp.getStatusCode());
+        assertEquals(1L, officeResp.getBody().get("deletedOfficeId"));
+
+        ResponseEntity<Map<String, Object>> custResp = controller.deleteCustomer(20L);
+        assertEquals(HttpStatus.OK, custResp.getStatusCode());
+        assertEquals(20L, custResp.getBody().get("deletedCustomerId"));
     }
 }

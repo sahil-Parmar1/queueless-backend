@@ -45,16 +45,19 @@ public class AdminOfficeController {
     private final OfficeDocumentRepository documentRepository;
     private final FileStorageService fileStorageService;
     private final DocumentSignatureService signatureService;
+    private final AdminCleanupService cleanupService;
 
     public AdminOfficeController(
             OfficeProfileRepository profileRepository,
             OfficeDocumentRepository documentRepository,
             FileStorageService fileStorageService,
-            DocumentSignatureService signatureService) {
+            DocumentSignatureService signatureService,
+            AdminCleanupService cleanupService) {
         this.profileRepository = profileRepository;
         this.documentRepository = documentRepository;
         this.fileStorageService = fileStorageService;
         this.signatureService = signatureService;
+        this.cleanupService = cleanupService;
     }
 
     @Transactional(readOnly = true)
@@ -152,6 +155,21 @@ public class AdminOfficeController {
                 "filename", filename != null ? filename : "",
                 "deletedFromDisk", deletedFromDisk
         ));
+    }
+
+    @DeleteMapping("/offices/{id}")
+    public ResponseEntity<Map<String, Object>> deleteOffice(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(cleanupService.deleteOfficeAndData(id));
+    }
+
+    @GetMapping("/customers")
+    public ResponseEntity<List<Map<String, Object>>> listCustomers() {
+        return ResponseEntity.ok(cleanupService.listCustomers());
+    }
+
+    @DeleteMapping("/customers/{id}")
+    public ResponseEntity<Map<String, Object>> deleteCustomer(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(cleanupService.deleteCustomerAndData(id));
     }
 
     /**
