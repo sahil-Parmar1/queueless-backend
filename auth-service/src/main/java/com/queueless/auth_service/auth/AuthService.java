@@ -1,0 +1,387 @@
+package com.queueless.auth_service.auth;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.stereotype.Service;
+
+import com.queueless.auth_service.auth.dto.CustomerGoogleLoginRequest;
+import com.queueless.auth_service.auth.dto.CustomerRegisterRequest;
+import com.queueless.auth_service.auth.dto.LoginRequest;
+import com.queueless.auth_service.auth.dto.OfficeRegisterRequest;
+import com.queueless.auth_service.user.Role;
+import com.queueless.auth_service.user.User;
+import com.queueless.auth_service.user.UserRepository;
+
+@Service
+public class AuthService {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
+    private final JwtDecoder firebaseJwtDecoder;
+
+    public AuthService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            JwtDecoder firebaseJwtDecoder) {
+
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+        this.firebaseJwtDecoder = firebaseJwtDecoder;
+    }
+
+    // =========================
+    // CUSTOMER REGISTRATION
+    // =========================
+
+    public java.util.Map<String, Object> registerCustomer(CustomerRegisterRequest request) {
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new RuntimeException("Email already registered");
+        }
+
+        User user = new User();
+        user.setName(request.getName() != null && !request.getName().isBlank() 
+                ? request.getName() 
+                : request.getEmail().split("@")[0]);
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(Role.CUSTOMER);
+        user.setEnabled(true);
+
+        User saved = userRepository.save(user);
+        String token = jwtService.generateToken(saved);
+
+        return java.util.Map.of(
+                "token", token,
+                "user", saved
+        );
+    }
+
+    // =========================
+    // CUSTOMER LOGIN
+    // =========================
+
+    public java.util.Map<String, Object> loginCustomer(LoginRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() ->
+                        new RuntimeException("Invalid email or password"));
+
+        if (user.getRole() != Role.CUSTOMER) {
+            throw new RuntimeException("This account is not a customer account");
+        }
+
+        if (!user.getEnabled()) {
+            throw new RuntimeException("Customer account is disabled");
+        }
+
+        if (user.getPassword() == null || !passwordEncoder.matches(
+                request.getPassword(),
+                user.getPassword())) {
+            throw new RuntimeException("Invalid email or password");
+        }
+
+        String token = jwtService.generateToken(user);
+        return java.util.Map.of(
+                "token", token,
+                "user", user
+        );
+    }
+
+    // =========================
+    // CUSTOMER AUTH OR AUTO-REGISTER
+    // =========================
+
+    public java.util.Map<String, Object> authOrRegisterCustomer(CustomerRegisterRequest request) {
+        java.util.Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
+
+        if (existingUser.isPresent()) {
+            User user = existingUser.get();
+            if (user.getRole() != Role.CUSTOMER) {
+                throw new RuntimeException("This email is registered under another account type");
+            }
+            if (!user.getEnabled()) {
+                throw new RuntimeException("Customer account is disabled");
+            }
+            if (user.getPassword() != null && !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+                throw new RuntimeException("Invalid password for existing account");
+            }
+            if (user.getPassword() == null && request.getPassword() != null && !request.getPassword().isBlank()) {
+                user.setPassword(passwordEncoder.encode(request.getPassword()));
+                userRepository.save(user);
+            }
+            String token = jwtService.generateToken(user);
+            return java.util.Map.of(
+                    "token", token,
+                    "user", user,
+                    "isNewUser", false
+            );
+        } else {
+            User newUser = new User();
+            String name = (request.getName() != null && !request.getName().isBlank()) 
+                    ? request.getName() 
+                    : request.getEmail().split("@")[0];
+            newUser.setName(name);
+            newUser.setEmail(request.getEmail());
+            newUser.setPassword(passwordEncoder.encode(request.getPassword()));
+            newUser.setRole(Role.CUSTOMER);
+            newUser.setEnabled(true);
+
+            User saved = userRepository.save(newUser);
+            String token = jwtService.generateToken(saved);
+            return java.util.Map.of(
+                    "token", token,
+                    "user", saved,
+                    "isNewUser", true
+            );
+        }
+    }
+
+    // =========================
+    // OFFICE REGISTRATION
+    // =========================
+
+    public java.util.Map<String, Object> registerOffice(OfficeRegisterRequest request) {
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new RuntimeException("Email already registered");
+        }
+
+        User user = new User();
+
+        user.setName(request.getName());
+        user.setEmail(request.getEmail());
+
+        // Never save the plain password
+        user.setPassword(
+                passwordEncoder.encode(request.getPassword())
+        );
+
+        user.setRole(Role.OFFICE);
+        user.setOfficeId(generateUniqueOfficeId());
+        user.setEnabled(true);
+
+        User saved = userRepository.save(user);
+        String token = jwtService.generateToken(saved);
+
+        return java.util.Map.of(
+                "token", token,
+                "user", saved
+        );
+    }
+
+    // =========================
+    // OFFICE LOGIN
+    // =========================
+
+    public String loginOffice(LoginRequest request) {
+
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() ->
+                        new RuntimeException("Invalid email or password"));
+
+        // Make sure this is an OFFICE account
+        if (user.getRole() != Role.OFFICE) {
+            throw new RuntimeException("Not an office account");
+        }
+
+        // Check whether account is enabled
+        if (!user.getEnabled()) {
+            throw new RuntimeException("Account is disabled");
+        }
+
+        // Check password
+        if (!passwordEncoder.matches(
+                request.getPassword(),
+                user.getPassword())) {
+
+            throw new RuntimeException("Invalid email or password");
+        }
+
+        if (user.getOfficeId() == null) {
+            user.setOfficeId(generateUniqueOfficeId());
+            user = userRepository.save(user);
+        }
+
+        // Generate JWT
+        return jwtService.generateToken(user);
+    }
+
+    // =========================
+    // CUSTOMER GOOGLE LOGIN
+    // =========================
+
+    public java.util.Map<String, Object> loginCustomerWithGoogleDetailed(
+            CustomerGoogleLoginRequest request) {
+
+        try {
+            // Verify Firebase ID token without firebase-admin
+            Jwt decodedToken = firebaseJwtDecoder.decode(request.getIdToken());
+
+            String uid = decodedToken.getSubject();
+            String email = decodedToken.getClaimAsString("email");
+            String nameClaim = decodedToken.getClaimAsString("name");
+            String name = (nameClaim != null && !nameClaim.isBlank()) ? nameClaim : email;
+
+            if (email == null || email.isBlank()) {
+                throw new RuntimeException("Firebase token does not contain a valid email address");
+            }
+
+            boolean isNew = !userRepository.existsByEmail(email);
+
+            // Find or create customer automatically in database
+            User user = userRepository.findByEmail(email)
+                    .orElseGet(() -> {
+                        User newUser = new User();
+                        newUser.setName(name);
+                        newUser.setEmail(email);
+                        newUser.setPassword(null);
+                        newUser.setGoogleId(uid);
+                        newUser.setRole(Role.CUSTOMER);
+                        newUser.setEnabled(true);
+                        return userRepository.save(newUser);
+                    });
+
+            boolean updated = false;
+            if (user.getGoogleId() == null) {
+                user.setGoogleId(uid);
+                updated = true;
+            }
+
+            if (user.getRole() != Role.CUSTOMER) {
+                user.setRole(Role.CUSTOMER);
+                updated = true;
+            }
+
+            if (!user.getEnabled()) {
+                user.setEnabled(true);
+                updated = true;
+            }
+
+            if (updated) {
+                user = userRepository.save(user);
+            }
+
+            // Generate your Queueless JWT
+            String token = jwtService.generateToken(user);
+
+            return java.util.Map.of(
+                    "token", token,
+                    "user", user,
+                    "isNewUser", isNew
+            );
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException(
+                    "Invalid Google authentication: " + e.getMessage(),
+                    e
+            );
+        }
+    }
+
+    public String loginCustomerWithGoogle(
+            CustomerGoogleLoginRequest request) {
+
+        java.util.Map<String, Object> result = loginCustomerWithGoogleDetailed(request);
+        return (String) result.get("token");
+    }
+
+    // =========================
+    // OFFICE GOOGLE LOGIN
+    // =========================
+
+    public java.util.Map<String, Object> loginOfficeWithGoogle(
+            CustomerGoogleLoginRequest request) {
+
+        try {
+
+            // Verify Firebase ID token without firebase-admin
+            Jwt decodedToken = firebaseJwtDecoder.decode(request.getIdToken());
+
+            String uid = decodedToken.getSubject();
+            String email = decodedToken.getClaimAsString("email");
+            String nameClaim = decodedToken.getClaimAsString("name");
+            String name = (nameClaim != null && !nameClaim.isBlank()) ? nameClaim : email;
+
+            if (email == null || email.isBlank()) {
+                throw new RuntimeException("Firebase token does not contain a valid email address");
+            }
+
+            // Find or create Office user
+            User user = userRepository.findByEmail(email)
+                    .orElseGet(() -> {
+
+                        User newUser = new User();
+
+                        newUser.setName(name);
+                        newUser.setEmail(email);
+                        newUser.setPassword(null);
+                        newUser.setGoogleId(uid);
+
+                        newUser.setRole(Role.OFFICE);
+                        newUser.setOfficeId(generateUniqueOfficeId());
+                        newUser.setEnabled(true);
+
+                        return userRepository.save(newUser);
+                    });
+
+            if (user.getGoogleId() == null) {
+                user.setGoogleId(uid);
+                userRepository.save(user);
+            }
+
+            if (user.getRole() == Role.OFFICE && user.getOfficeId() == null) {
+                user.setOfficeId(generateUniqueOfficeId());
+                user = userRepository.save(user);
+            }
+
+            // Make sure this is an OFFICE account
+            if (user.getRole() != Role.OFFICE) {
+                throw new RuntimeException(
+                        "This email is not registered as an office account"
+                );
+            }
+
+            if (!user.getEnabled()) {
+                throw new RuntimeException(
+                        "Office account is disabled"
+                );
+            }
+
+            // Generate your Queueless JWT
+            String token = jwtService.generateToken(user);
+
+            return java.util.Map.of(
+                    "token", token,
+                    "user", user
+            );
+
+        } catch (Exception e) {
+
+            e.printStackTrace();
+
+            throw new RuntimeException(
+                    "Invalid Google authentication: " + e.getMessage(),
+                    e
+            );
+        }
+    }
+
+    public String generateUniqueOfficeId() {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        String id;
+        do {
+            StringBuilder sb = new StringBuilder("OFF-");
+            for (int i = 0; i < 6; i++) {
+                sb.append(chars.charAt(random.nextInt(chars.length())));
+            }
+            id = sb.toString();
+        } while (userRepository.existsByOfficeId(id));
+        return id;
+    }
+}
+
