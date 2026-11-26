@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Queueless Admin — Office Verification</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="login-view" class="auth-shell">
+    <div class="auth-card">
+      <div class="brand-badge">Queueless Admin</div>
+      <h1>Office Verification Portal</h1>
+      <p class="muted">Sign in with your administrator credentials to review office applications, view verification documents, and approve or reject listings.</p>
+
+      <form id="login-form" class="stack">
+        <label class="field">
+          <span>API Gateway URL</span>
+          <input id="gateway-url" type="url" required placeholder="https://api-gateway-production-99c77a9f.up.railway.app">
+        </label>
+
+        <label class="field">
+          <span>Admin Username</span>
+          <input id="username" type="text" autocomplete="username" required placeholder="Enter admin username">
+        </label>
+
+        <label class="field">
+          <span>Password</span>
+          <input id="password" type="password" autocomplete="current-password" required placeholder="Enter admin password">
+        </label>
+
+        <div id="login-error" class="alert hidden"></div>
+
+        <button id="login-btn" type="submit" class="btn btn-primary">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="dashboard-view" class="app-shell hidden">
+    <header class="topbar">
+      <div>
+        <div class="brand-row">
+          <span class="brand-badge">Queueless Admin</span>
+          <span id="gateway-pill" class="gateway-pill"></span>
+        </div>
+        <h1>Office Verification Dashboard</h1>
+      </div>
+      <div class="topbar-actions">
+        <span id="admin-user-label" class="muted"></span>
+        <button id="refresh-btn" type="button" class="btn btn-secondary">Refresh</button>
+        <button id="logout-btn" type="button" class="btn btn-outline">Logout</button>
+      </div>
+    </header>
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <span class="stat-label">Total Offices</span>
+        <strong id="stat-total">0</strong>
+      </article>
+      <article class="stat-card stat-pending">
+        <span class="stat-label">Pending Review</span>
+        <strong id="stat-pending">0</strong>
+      </article>
+      <article class="stat-card stat-approved">
+        <span class="stat-label">Approved</span>
+        <strong id="stat-approved">0</strong>
+      </article>
+      <article class="stat-card stat-rejected">
+        <span class="stat-label">Rejected</span>
+        <strong id="stat-rejected">0</strong>
+      </article>
+    </section>
+
+    <section class="toolbar">
+      <div class="filter-tabs" role="tablist">
+        <button type="button" class="tab active" data-status="ALL">All</button>
+        <button type="button" class="tab" data-status="PENDING">Pending</button>
+        <button type="button" class="tab" data-status="APPROVED">Approved</button>
+        <button type="button" class="tab" data-status="REJECTED">Rejected</button>
+      </div>
+      <input id="search-input" type="search" class="search-input" placeholder="Search by office name, ID, email, city, category...">
+    </section>
+
+    <div id="banner" class="alert hidden"></div>
+
+    <section class="table-card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Office</th>
+              <th>Category</th>
+              <th>Location</th>
+              <th>Status</th>
+              <th>Documents</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="offices-tbody"></tbody>
+        </table>
+      </div>
+      <div id="empty-state" class="empty-state hidden">No offices match the current filter.</div>
+    </section>
+  </div>
+
+  <div id="detail-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <span id="modal-office-id" class="mono muted"></span>
+          <h2 id="modal-office-name"></h2>
+        </div>
+        <button id="close-modal-btn" type="button" class="btn btn-outline">Close</button>
+      </div>
+
+      <div id="modal-details" class="details-grid"></div>
+
+      <div class="modal-section">
+        <h3>Uploaded Verification Documents</h3>
+        <div id="modal-documents" class="docs-list"></div>
+      </div>
+
+      <div id="preview-box" class="preview-box hidden">
+        <div class="preview-header">
+          <strong id="preview-title">Document Preview</strong>
+          <button id="close-preview-btn" type="button" class="btn btn-outline btn-sm">Hide Preview</button>
+        </div>
+        <div id="preview-container" class="preview-container"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="modal-approve-btn" type="button" class="btn btn-approve">Approve Office</button>
+        <button id="modal-reject-btn" type="button" class="btn btn-reject">Reject Office</button>
+        <button id="modal-pending-btn" type="button" class="btn btn-secondary">Mark Pending</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

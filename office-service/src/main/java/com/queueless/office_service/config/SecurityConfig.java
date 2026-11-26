@@ -44,10 +44,13 @@ public class SecurityConfig {
                     "/api/office/providers/login",
                     "/api/office/provider/login",
                     "/api/provider/login",
+                    "/api/admin/documents/view/**",
                     "/ws/**"
                 ).permitAll()
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/provider/**").hasRole("PROVIDER")
-                .requestMatchers("/api/office/**", "/uploads/**").hasRole("OFFICE")
+                .requestMatchers("/api/office/**").hasRole("OFFICE")
+                .requestMatchers("/uploads/**").hasAnyRole("OFFICE", "ADMIN")
                 .anyRequest().authenticated()
             )
 

@@ -45,15 +45,19 @@ public class OfficeDocumentController {
                     .body(Map.of("error", "Authentication required"));
         }
 
-        User authenticatedUser = resolveAuthenticatedUser(authentication);
-        if (authenticatedUser == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "Authenticated user not found"));
-        }
+        boolean isAdmin = hasAdminAuthority(authentication);
+        User authenticatedUser = null;
+        if (!isAdmin) {
+            authenticatedUser = resolveAuthenticatedUser(authentication);
+            if (authenticatedUser == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Authenticated user not found"));
+            }
 
-        if (authenticatedUser.getRole() != Role.OFFICE) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Only office accounts can access verification documents"));
+            if (authenticatedUser.getRole() != Role.OFFICE) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Only office accounts can access verification documents"));
+            }
         }
 
         try {
@@ -72,11 +76,13 @@ public class OfficeDocumentController {
                     .body(Map.of("error", "Document not found"));
         }
 
-        OfficeProfile profile = document.getOfficeProfile();
-        User owner = profile != null ? profile.getUser() : null;
-        if (owner == null || owner.getId() == null || !owner.getId().equals(authenticatedUser.getId())) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "You do not have permission to access this document"));
+        if (!isAdmin) {
+            OfficeProfile profile = document.getOfficeProfile();
+            User owner = profile != null ? profile.getUser() : null;
+            if (owner == null || owner.getId() == null || !owner.getId().equals(authenticatedUser.getId())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "You do not have permission to access this document"));
+            }
         }
 
         Resource resource;
@@ -102,6 +108,14 @@ public class OfficeDocumentController {
                 .headers(headers)
                 .contentType(mediaType)
                 .body(resource);
+    }
+
+    private boolean hasAdminAuthority(Authentication authentication) {
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return false;
+        }
+        return authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
     }
 
     private User resolveAuthenticatedUser(Authentication authentication) {

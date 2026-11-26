@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.queueless.auth_service.auth.dto.AdminLoginRequest;
 import com.queueless.auth_service.auth.dto.CustomerGoogleLoginRequest;
 import com.queueless.auth_service.auth.dto.CustomerRegisterRequest;
 import com.queueless.auth_service.auth.dto.LoginRequest;
@@ -84,5 +85,12 @@ public class AuthController {
         return ResponseEntity.ok(
                 java.util.Map.of("token", token)
         );
+    }
+
+    @PostMapping("/admin/login")
+    public ResponseEntity<?> loginAdmin(
+            @RequestBody AdminLoginRequest request) {
+
+        return ResponseEntity.ok(authService.loginAdmin(request));
     }
 }

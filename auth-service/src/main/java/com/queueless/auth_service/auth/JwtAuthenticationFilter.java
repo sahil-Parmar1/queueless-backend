@@ -59,27 +59,41 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (jwtService.isTokenValid(token)) {
 
                 String email = jwtService.extractEmail(token);
+                String role = jwtService.extractRole(token);
 
-                User user = userRepository.findByEmail(email)
-                        .orElse(null);
-
-                if (user != null && user.getEnabled()) {
-
-                    SimpleGrantedAuthority authority =
-                            new SimpleGrantedAuthority(
-                                    "ROLE_" + user.getRole().name()
-                            );
-
+                if ("ADMIN".equalsIgnoreCase(role) && email != null) {
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(
-                                    user,
+                                    email,
                                     null,
-                                    List.of(authority)
+                                    List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
                             );
 
                     SecurityContextHolder
                             .getContext()
                             .setAuthentication(authentication);
+                } else {
+                    User user = userRepository.findByEmail(email)
+                            .orElse(null);
+
+                    if (user != null && user.getEnabled()) {
+
+                        SimpleGrantedAuthority authority =
+                                new SimpleGrantedAuthority(
+                                        "ROLE_" + user.getRole().name()
+                                );
+
+                        UsernamePasswordAuthenticationToken authentication =
+                                new UsernamePasswordAuthenticationToken(
+                                        user,
+                                        null,
+                                        List.of(authority)
+                                );
+
+                        SecurityContextHolder
+                                .getContext()
+                                .setAuthentication(authentication);
+                    }
                 }
             }
 

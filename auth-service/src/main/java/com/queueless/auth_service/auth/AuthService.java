@@ -1,10 +1,17 @@
 package com.queueless.auth_service.auth;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
+import com.queueless.auth_service.auth.dto.AdminLoginRequest;
 import com.queueless.auth_service.auth.dto.CustomerGoogleLoginRequest;
 import com.queueless.auth_service.auth.dto.CustomerRegisterRequest;
 import com.queueless.auth_service.auth.dto.LoginRequest;
@@ -20,6 +27,12 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final JwtDecoder firebaseJwtDecoder;
+
+    @Value("${admin.username:}")
+    private String adminUsername;
+
+    @Value("${admin.password:}")
+    private String adminPassword;
 
     public AuthService(
             UserRepository userRepository,
@@ -382,6 +395,50 @@ public class AuthService {
             id = sb.toString();
         } while (userRepository.existsByOfficeId(id));
         return id;
+    }
+
+    /**
+     * Authenticates the administrator against environment-configured credentials
+     * and issues a short/standard ROLE_ADMIN JWT.
+     */
+    public java.util.Map<String, Object> loginAdmin(AdminLoginRequest request) {
+        if (adminUsername == null || adminUsername.isBlank()
+                || adminPassword == null || adminPassword.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Admin credentials are not configured (set ADMIN_USERNAME and ADMIN_PASSWORD)"
+            );
+        }
+
+        String providedUsername = request != null && request.getUsername() != null
+                ? request.getUsername().trim()
+                : "";
+        String providedPassword = request != null && request.getPassword() != null
+                ? request.getPassword()
+                : "";
+
+        boolean usernameMatches = MessageDigest.isEqual(
+                providedUsername.getBytes(StandardCharsets.UTF_8),
+                adminUsername.trim().getBytes(StandardCharsets.UTF_8)
+        );
+        boolean passwordMatches = MessageDigest.isEqual(
+                providedPassword.getBytes(StandardCharsets.UTF_8),
+                adminPassword.getBytes(StandardCharsets.UTF_8)
+        );
+
+        if (!usernameMatches || !passwordMatches) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid admin username or password"
+            );
+        }
+
+        String token = jwtService.generateAdminToken(adminUsername.trim());
+        return java.util.Map.of(
+                "token", token,
+                "username", adminUsername.trim(),
+                "role", Role.ADMIN.name()
+        );
     }
 }
 

@@ -49,6 +49,29 @@ public class JwtService {
                 .compact();
     }
 
+    /**
+     * Generates a signed JWT for the configured administrator account.
+     */
+    public String generateAdminToken(String username) {
+        return Jwts.builder()
+                .subject(username)
+                .claim("username", username)
+                .claim("role", "ADMIN")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + expirationTime))
+                .signWith(key)
+                .compact();
+    }
+
+    public String extractRole(String token) {
+        return Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("role", String.class);
+    }
+
     public String extractEmail(String token) {
 
         return Jwts.parser()

@@ -61,7 +61,7 @@ public class GatewayProxyController {
                 .build();
     }
 
-    @RequestMapping(value = {"/api/auth/**", "/api/test/**", "/api/office/**", "/uploads/**", "/api/**"})
+    @RequestMapping(value = {"/api/auth/**", "/api/test/**", "/api/office/**", "/api/admin/**", "/uploads/**", "/api/**"})
     public ResponseEntity<byte[]> proxyRequest(HttpServletRequest request) {
         try {
             String targetBaseUrl = resolveTargetServiceUrl(request.getRequestURI());
@@ -155,7 +155,7 @@ public class GatewayProxyController {
     private String resolveTargetServiceUrl(String uri) {
         if (uri.startsWith("/api/auth/") || uri.startsWith("/api/test/")) {
             return authServiceUrl;
-        } else if (uri.startsWith("/api/office/") || uri.startsWith("/api/provider/") || uri.startsWith("/uploads/")) {
+        } else if (uri.startsWith("/api/office/") || uri.startsWith("/api/provider/") || uri.startsWith("/api/admin/") || uri.startsWith("/uploads/")) {
             return officeServiceUrl;
         } else if (uri.startsWith("/api/queue/office/")) {
             return officeServiceUrl;
