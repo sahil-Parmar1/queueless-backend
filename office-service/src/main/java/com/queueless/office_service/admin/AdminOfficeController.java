@@ -14,6 +14,7 @@ import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -115,6 +116,41 @@ public class AdminOfficeController {
                 "filename", filename,
                 "signedViewPath", signedViewPath,
                 "expiresInSeconds", DocumentSignatureService.DEFAULT_TTL_SECONDS
+        ));
+    }
+
+    /**
+     * Permanently removes a verification document record from the database and
+     * deletes its backing file from storage to reclaim database/volume space.
+     */
+    @Transactional
+    @DeleteMapping("/documents/{documentId}")
+    public ResponseEntity<Map<String, Object>> deleteDocument(
+            @PathVariable("documentId") Long documentId) {
+
+        OfficeDocument document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found: " + documentId));
+
+        String filename = extractFilename(document.getFileUrl());
+        OfficeProfile profile = document.getOfficeProfile();
+
+        if (profile != null && profile.getDocuments() != null) {
+            profile.getDocuments().removeIf(d -> documentId.equals(d.getId()));
+            profileRepository.saveAndFlush(profile);
+        } else {
+            documentRepository.delete(document);
+        }
+
+        boolean deletedFromDisk = false;
+        if (filename != null) {
+            deletedFromDisk = fileStorageService.deleteFile(filename);
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Document deleted from database and storage",
+                "deletedDocumentId", documentId,
+                "filename", filename != null ? filename : "",
+                "deletedFromDisk", deletedFromDisk
         ));
     }
 

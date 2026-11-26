@@ -403,6 +403,13 @@
         previewOrDownloadBtn.addEventListener("click", () => fetchDocumentBlob(doc, !isInlineRenderable));
         btnGroup.appendChild(previewOrDownloadBtn);
 
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "btn btn-reject btn-sm";
+        deleteBtn.textContent = "Delete";
+        deleteBtn.addEventListener("click", () => deleteDocument(doc));
+        btnGroup.appendChild(deleteBtn);
+
         row.append(info, btnGroup);
         modalDocuments.appendChild(row);
       }
@@ -470,6 +477,31 @@
     } catch (err) {
       if (err.message !== "Unauthorized") {
         showAlert(banner, err.message || "Unable to load document preview.");
+      }
+    }
+  }
+
+  async function deleteDocument(doc) {
+    const label = doc.originalFileName || doc.filename || `document #${doc.id}`;
+    if (!window.confirm(`Delete "${label}" permanently from the database and disk storage?`)) {
+      return;
+    }
+
+    hideAlert(banner);
+    try {
+      const res = await apiFetch(`/api/admin/documents/${encodeURIComponent(doc.id)}`, {
+        method: "DELETE"
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || data.error || `Delete failed (${res.status})`);
+      }
+      clearPreview();
+      showAlert(banner, data.message || `Deleted "${label}".`, true);
+      await loadOffices();
+    } catch (err) {
+      if (err.message !== "Unauthorized") {
+        showAlert(banner, err.message || "Failed to delete document.");
       }
     }
   }

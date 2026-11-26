@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -72,7 +73,7 @@ class AdminOfficeControllerTest {
         doc.setOriginalFileName("license.pptx");
         doc.setFileUrl("/uploads/documents/test-doc.pptx");
         doc.setContentType("application/vnd.openxmlformats-officedocument.presentationml.presentation");
-        profile.setDocuments(List.of(doc));
+        profile.setDocuments(new ArrayList<>(List.of(doc)));
     }
 
     @Test
@@ -117,5 +118,18 @@ class AdminOfficeControllerTest {
 
         ResponseEntity<?> badView = controller.viewSignedDocument("test-doc.pptx", expires, "tampered");
         assertEquals(HttpStatus.FORBIDDEN, badView.getStatusCode());
+    }
+
+    @Test
+    void deleteDocumentRemovesRecordAndDeletesStoredFile() {
+        when(documentRepository.findById(10L)).thenReturn(Optional.of(doc));
+        when(profileRepository.saveAndFlush(any(OfficeProfile.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(fileStorageService.deleteFile("test-doc.pptx")).thenReturn(true);
+
+        ResponseEntity<Map<String, Object>> deleteResp = controller.deleteDocument(10L);
+        assertEquals(HttpStatus.OK, deleteResp.getStatusCode());
+        assertEquals(10L, deleteResp.getBody().get("deletedDocumentId"));
+        assertEquals(true, deleteResp.getBody().get("deletedFromDisk"));
+        assertEquals(0, profile.getDocuments().size());
     }
 }

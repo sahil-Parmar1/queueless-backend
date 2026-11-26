@@ -82,4 +82,22 @@ public class FileStorageService {
             throw new IllegalArgumentException("Invalid filename: " + filename);
         }
     }
+
+    /**
+     * Deletes a stored verification document from disk/volume if present.
+     */
+    public boolean deleteFile(String filename) {
+        validateFilename(filename);
+
+        Path targetLocation = this.uploadDir.resolve(filename).normalize();
+        if (!targetLocation.startsWith(this.uploadDir) || !this.uploadDir.equals(targetLocation.getParent())) {
+            throw new IllegalArgumentException("Invalid file path: " + filename);
+        }
+
+        try {
+            return Files.deleteIfExists(targetLocation);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to delete file: " + filename, e);
+        }
+    }
 }
