@@ -7,11 +7,11 @@ COPY src ./src
 RUN mvn -B -DskipTests clean package
 
 # Runtime stage
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 
 COPY --from=build /app/target/office-service-0.0.1-SNAPSHOT.jar app.jar
 
 EXPOSE 8083
 
-ENTRYPOINT ["sh", "-c", "exec java -Dserver.port=${PORT:-${SERVER_PORT:-8083}} -jar /app/app.jar"]
+ENTRYPOINT ["sh", "-c", "sleep 3 && exec java -Dserver.port=${PORT:-${SERVER_PORT:-8083}} -jar /app/app.jar"]
